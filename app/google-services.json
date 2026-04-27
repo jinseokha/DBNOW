@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "368055916290",
+    "project_id": "dbnow-3760d",
+    "storage_bucket": "dbnow-3760d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:368055916290:android:df751cdb55926d581a941b",
+        "android_client_info": {
+          "package_name": "com.devseok.dbnow"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAZqYsNL_j-dKKUgubLRgIhFvBLxXvXiqs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
