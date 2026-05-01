@@ -3,8 +3,9 @@ package com.devseok.dbnow.domain.usecase
 import com.devseok.dbnow.domain.repository.BusRepository
 import com.devseok.dbnow.domain.repository.FavoriteRepository
 import com.devseok.dbnow.ui.main.FavoriteBusItem
+import javax.inject.Inject
 
-class GetFavoriteBusArrivalsUseCase (
+class GetFavoriteBusArrivalsUseCase @Inject constructor (
     private val busRepository: BusRepository,
     private val favoriteRepository: FavoriteRepository
 ) {

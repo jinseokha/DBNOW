@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -172,13 +174,13 @@ fun BusArrivalCard(
             ArrivalStatusView(remainingTime = busItem.remainingTime)
 
             // 4. 추가 기능 버튼 (삭제 등)
-            /*IconButton(onClick = onDeleteClick) {
+            IconButton(onClick = onDeleteClick) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "삭제",
                     tint = MaterialTheme.colorScheme.outline
                 )
-            }*/
+            }
         }
     }
 }

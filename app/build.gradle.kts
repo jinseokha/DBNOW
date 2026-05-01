@@ -82,7 +82,7 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    implementation("androidx.glance:glance-appwidget:1.0.0")
+    implementation(libs.androidx.glance.appwidget.v100)
 
     // Hilt
     implementation(libs.hilt.android)
@@ -109,7 +109,11 @@ dependencies {
 
     implementation(libs.rxjava3.rxkotlin)
     implementation(libs.rxjava3.rxandroid)
-    implementation("androidx.compose.material3:material3:1.2.1")
-    implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
-    implementation("com.google.firebase:firebase-analytics")
+    implementation(libs.androidx.material3)
+    implementation(libs.firebase.bom)
+    implementation(libs.firebase.analytics)
+
+    implementation(libs.androidx.compose.material.icons.core)
+
+    implementation(libs.androidx.compose.material.icons.extended)
 }
