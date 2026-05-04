@@ -28,8 +28,8 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // 메인 대시보드 화면 호출
-                    MainDashboardScreen()
+
+                    DBNowNavGraph()
                 }
             }
         }

@@ -48,7 +48,15 @@ class MainDashboardViewModel @Inject constructor(
     private fun checkAuthAndLoadData() {
         viewModelScope.launch {
             if (authRepository.getCurrentUserId() == null) {
-                authRepository.signInAnonymously()
+
+                val result = authRepository.signInAnonymously()
+                result.onSuccess { uid ->
+                    // 로그인 성공 (필요시 로그 출력)
+                    println("익명 로그인 성공: $uid")
+                }.onFailure { e ->
+                    // 네트워크 에러 등으로 실패 시 처리
+                    e.printStackTrace()
+                }
             }
             loadBusArrivals()
         }

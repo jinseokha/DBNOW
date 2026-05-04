@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -45,7 +46,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainDashboardScreen(
-    viewModel: MainDashboardViewModel = hiltViewModel()
+    viewModel: MainDashboardViewModel = hiltViewModel(),
+    onNavigateToSearch: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -55,7 +57,16 @@ fun MainDashboardScreen(
                 title = { Text("대구 버스 나우", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                ),
+                actions = {
+                    // 검색 화면으로 이동하는 아이콘 버튼
+                    IconButton(onClick = { onNavigateToSearch() }) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "검색 화면으로 이동"
+                        )
+                    }
+                },
             )
         }
     ) { padding ->

@@ -24,7 +24,7 @@ class FavoriteRepositoryImpl @Inject constructor(
      */
     override suspend fun getFavoriteList(): Result<List<FavoriteBus>> = runCatching {
         val userId = authRepository.getCurrentUserId()
-            ?: throw Exception("인증되지 않은 사용자입니다.")
+            ?: authRepository.signInAnonymously().getOrThrow()
 
         // 1. Firestore에서 해당 유저의 즐겨찾기 쿼리
         val snapshot = favoriteCollection
@@ -44,7 +44,7 @@ class FavoriteRepositoryImpl @Inject constructor(
      */
     override suspend fun addFavorite(favoriteBus: FavoriteBus): Result<Unit> = runCatching {
         val userId = authRepository.getCurrentUserId()
-            ?: throw Exception("인증되지 않은 사용자입니다.")
+            ?: authRepository.signInAnonymously().getOrThrow()
 
         // 1. 도메인 모델에 사용자 ID를 입혀 Entity로 변환
         val entity = favoriteBus.toEntity(userId)

@@ -15,10 +15,14 @@ class AuthRepositoryImpl @Inject constructor(
 
     // 사용자가 로그인되어 있지 않다면 익명 로그인을 수행하여 UID 확보
     override suspend fun signInAnonymously(): Result<String> = runCatching {
-        val result = firebaseAuth.signInAnonymously().await()
-        result.user?.uid ?: throw Exception("인증 실패")
-    }
+        // 이미 로그인된 상태라면 기존 UID 반환
+        firebaseAuth.currentUser?.uid?.let { return@runCatching it }
 
+        // 로그인되어 있지 않다면 익명 로그인 시도
+        val result = firebaseAuth.signInAnonymously().await()
+
+        result.user?.uid ?: throw Exception("익명 로그인에 실패했습니다.")
+    }
     override suspend fun signOut(): Result<Unit> = runCatching {
         firebaseAuth.signOut()
     }

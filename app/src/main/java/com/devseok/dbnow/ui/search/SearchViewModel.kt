@@ -2,10 +2,13 @@ package com.devseok.dbnow.ui.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.devseok.dbnow.domain.model.SearchResultItem
+import com.devseok.dbnow.domain.usecase.SearchUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -16,59 +19,65 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-
+    private val searchUseCase: SearchUseCase
 ) : ViewModel(){
-    private val _uiState = MutableStateFlow(SearchState())
-    val uiState = _uiState.asStateFlow()
-
-    // 검색어를 관찰하여 debounce 처리하기 위한 Flow
-    private val searchQueryFlow = MutableStateFlow("")
-
-    init {
-        observeSearchQuery()
-    }
+    private val _state = MutableStateFlow(SearchState())
+    val state: StateFlow<SearchState> = _state.asStateFlow()
 
     fun onEvent(event: SearchEvent) {
         when (event) {
-            is SearchEvent.OnQueryChange -> {
-                _uiState.update { it.copy(query = event.query) }
-                searchQueryFlow.value = event.query
+            is SearchEvent.OnQueryChanged -> {
+                _state.update { it.copy(query = event.query) }
+                // 검색어를 다 지우면 초기 상태로 되돌림
+                if (event.query.isBlank()) {
+                    resetState()
+                }
             }
-            is SearchEvent.AddFavorite -> {
-                // 즐겨찾기 추가 로직 호출
-            }
+            SearchEvent.OnSearchClick -> search()
+            SearchEvent.OnClearClick -> resetState()
         }
     }
 
-    @OptIn(FlowPreview::class)
-    private fun observeSearchQuery() {
+    private fun search() {
+        val currentQuery = _state.value.query.trim()
+        if (currentQuery.isEmpty()) return
+
         viewModelScope.launch {
-            searchQueryFlow
-                .debounce(500L) // 0.5초 대기
-                .distinctUntilChanged() // 이전 검색어와 동일하면 무시
-                .filter { it.length >= 2 } // 최소 2글자 이상일 때만 검색
-                .collect { query ->
-                    performSearch(query)
+            // 로딩 시작, 에러 초기화, 검색 여부 true
+            _state.update {
+                it.copy(
+                    isLoading = true,
+                    errorMessage = null,
+                    hasSearched = true
+                )
+            }
+
+            searchUseCase(currentQuery)
+                .onSuccess { results ->
+                    _state.update {
+                        it.copy(isLoading = false, results = results)
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = error.message ?: "검색 중 오류가 발생했습니다.",
+                            results = emptyList()
+                        )
+                    }
                 }
         }
     }
 
-    private suspend fun performSearch(query: String) {
-        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-
-        // TODO: 실제 API 호출 (searchUseCase(query))
-        // 임시 더미 데이터로 동작 확인
-        delay(1000)
-        val mockResults = listOf(
-            SearchResultItem("3000706000", "706", "간선 버스", true),
-            SearchResultItem("7011010100", "경북대학교북문앞", "정류장 번호: 02010", false)
-        ).filter { it.title.contains(query) }
-
-        _uiState.update {
+    private fun resetState() {
+        _state.update {
             it.copy(
+                query = "",
                 isLoading = false,
-                searchResults = mockResults,
-                errorMessage = if (mockResults.isEmpty()) "검색 결과가 없습니다." else null
+                results = emptyList(),
+                errorMessage = null,
+                hasSearched = false
             )
         }
     }

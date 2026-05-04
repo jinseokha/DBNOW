@@ -10,6 +10,6 @@ class DeleteFavoriteUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(stationId: String, busId: String): Result<Unit> {
         val documentId = "${stationId}_${busId}"
-        return favoriteRepository.removeFavorite(documentId)
+        return favoriteRepository.removeFavorite(stationId, busId)
     }
 }
