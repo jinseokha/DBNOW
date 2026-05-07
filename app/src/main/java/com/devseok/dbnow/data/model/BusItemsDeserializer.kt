@@ -1,13 +1,9 @@
 package com.devseok.dbnow.data.model
 
-import com.google.gson.JsonDeserializationContext
-import com.google.gson.JsonDeserializer
-import com.google.gson.JsonElement
-import java.lang.reflect.Type
-
 /**
  * 공공데이터포털의 고질적인 JSON 파싱 문제를 해결하는 커스텀 파서
  */
+/*
 class BusItemsDeserializer : JsonDeserializer<BusItems> {
     override fun deserialize(
         json: JsonElement,
@@ -40,4 +36,4 @@ class BusItemsDeserializer : JsonDeserializer<BusItems> {
         // 정류장과 버스 노선이 하나로 합쳐진 리스트를 반환!
         return BusItems(itemList = combinedList)
     }
-}
+}*/

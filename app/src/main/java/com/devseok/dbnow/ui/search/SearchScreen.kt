@@ -1,31 +1,29 @@
 package com.devseok.dbnow.ui.search
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AddCircleOutline
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,29 +32,43 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.devseok.dbnow.domain.model.BusArrivalInfo
+import com.devseok.dbnow.domain.model.BusPosition
 import com.devseok.dbnow.domain.model.SearchResultItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel(),
-    onItemClick: (SearchResultItem) -> Unit,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onNavigateToStation: (stationId: String, name: String) -> Unit, // 추가
+    onNavigateToBus: (routeId: String, name: String) -> Unit        // 추가
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    val state by viewModel.state.collectAsState()
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
+
+    LaunchedEffect(state.toastMessage) {
+        state.toastMessage?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            viewModel.onEvent(SearchEvent.OnToastShown)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -121,11 +133,23 @@ fun SearchScreen(
                 state.results.isNotEmpty() -> {
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         items(state.results) { item ->
+                            val isFavorite = state.favoriteIds.contains(item.id)
+
                             SearchResultItemCard(
                                 item = item,
-                                onClick = {
-                                    focusManager.clearFocus()
-                                    onItemClick(item)
+                                isFavorite = isFavorite,
+                                onRowClick = {
+                                    if (item.isBus) {
+                                        val routeId = item.routeId ?: item.id
+                                        onNavigateToBus(routeId, item.title)
+                                    } else {
+                                        val stationId = item.stationId ?: item.id
+                                        onNavigateToStation(stationId, item.title)
+                                    }
+                                },
+                                onFavoriteClick = {
+                                    // 2. 즐겨찾기 별 클릭 이벤트
+                                    viewModel.onEvent(SearchEvent.OnFavoriteClick(item))
                                 }
                             )
                             Divider()
@@ -139,55 +163,230 @@ fun SearchScreen(
             }
         }
     }
-
-
 }
 
 @Composable
 fun SearchResultItemCard(
     item: SearchResultItem,
-    onClick: () -> Unit
+    isFavorite: Boolean,
+    onRowClick: () -> Unit,
+    onFavoriteClick: () -> Unit
 ) {
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            .clickable { onRowClick() } // ★ 행 전체 클릭 영역
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 아이콘으로 버스/정류장 구분
+        Icon(
+            imageVector = if (item.isBus) Icons.Default.DirectionsBus else Icons.Default.Place,
+            contentDescription = null,
+            tint = if (item.isBus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.size(32.dp)
+        )
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        // ★ 글자 영역에 weight(1f)를 주어 우측 별 아이콘을 끝으로 밀어냅니다.
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = item.title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            Text(text = item.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        // ★ 우측 끝의 즐겨찾기 추가 버튼 (행 클릭과 겹치지 않는 독립적인 클릭 영역)
+        IconButton(onClick = onFavoriteClick) {
             Icon(
-                imageVector = if (item.isBus) Icons.Default.DirectionsBus else Icons.Default.Place,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
+                imageVector = if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                contentDescription = if (isFavorite) "즐겨찾기 해제" else "즐겨찾기 추가",
+                // 꽉 찬 별일 때는 노란색/주황색 등 강조 색상을 주면 좋습니다.
+                tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
             )
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.width(16.dp))
+@Composable
+fun BottomSheetDetailsContent(
+    state: SearchState,
+    onFavoriteClick: (SearchResultItem) -> Unit
+) {
+    val selectedItem = state.selectedItem ?: return
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 24.dp)
+    ) {
+        // 타이틀: 버스면 노선도 느낌, 정류소면 전광판 느낌
+        val titleText = if (selectedItem.isBus) "[${selectedItem.title}] 실시간 노선도" else "'${selectedItem.title}' 실시간 도착"
+
+        Text(
+            text = titleText,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+
+        Divider()
+
+        if (state.isDetailLoading) {
+            Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else {
+            // ★ 선택된 아이템이 버스냐 정류소냐에 따라 완전히 다른 UI를 그립니다.
+            if (selectedItem.isBus) {
+                // 1. 버스를 눌렀을 때 -> 노선도 + 실시간 위치 타임라인
+                BusRouteTimelineView(
+                    routeStations = state.routeStations,
+                    busPositions = state.busPositions,
+                    favoriteIds = state.favoriteIds,
+                    onFavoriteClick = onFavoriteClick
                 )
-                Text(
-                    text = item.subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                // 2. 정류소를 눌렀을 때 -> 실시간 도착 예정 버스 전광판
+                StationArrivalBoardView(
+                    stationArrivals = state.stationArrivals
                 )
             }
+        }
+    }
+}
 
-            Icon(
-                imageVector = Icons.Default.AddCircleOutline,
-                contentDescription = "즐겨찾기 추가",
-                tint = MaterialTheme.colorScheme.secondary
-            )
+// =========================================================
+// 1. 버스를 눌렀을 때: 타임라인 노선도 & 실시간 버스 위치 UI
+// =========================================================
+@Composable
+fun BusRouteTimelineView(
+    routeStations: List<SearchResultItem>,
+    busPositions: List<BusPosition>,
+    favoriteIds: Set<String>,
+    onFavoriteClick: (SearchResultItem) -> Unit
+) {
+    if (routeStations.isEmpty()) {
+        Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+            Text("노선 정보가 없습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        return
+    }
+
+    LazyColumn {
+        itemsIndexed(routeStations) { index, station ->
+            // 현재 역(station.stationId)에 버스(busPositions.nodeId)가 있는지 체크!
+            val hasBusHere = busPositions.any { it.nodeId == station.stationId }
+            val isFavorite = favoriteIds.contains(station.id)
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 좌측 타임라인 그래픽 (선 + 동그라미/버스아이콘)
+                Box(
+                    modifier = Modifier.width(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // 수직 선 그리기
+                    Divider(
+                        modifier = Modifier.width(2.dp).height(50.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                    // 버스가 있으면 큼직한 버스 아이콘, 없으면 작은 동그라미 점
+                    if (hasBusHere) {
+                        Icon(
+                            imageVector = Icons.Default.DirectionsBus,
+                            contentDescription = "버스 현재 위치",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp).align(Alignment.Center)
+                        )
+                    } else {
+                        Surface(
+                            modifier = Modifier.size(12.dp),
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = MaterialTheme.colorScheme.outline
+                        ) {}
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // 정류장 이름
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = station.title, fontWeight = if (hasBusHere) FontWeight.Bold else FontWeight.Normal)
+                }
+
+                // 즐겨찾기 버튼
+                IconButton(onClick = { onFavoriteClick(station) }) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                        contentDescription = "즐겨찾기",
+                        tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    )
+                }
+            }
+        }
+    }
+}
+
+// =========================================================
+// 2. 정류소를 눌렀을 때: 실시간 도착 예정 버스 리스트 (전광판)
+// =========================================================
+@Composable
+fun StationArrivalBoardView(
+    stationArrivals: List<BusArrivalInfo>
+) {
+    if (stationArrivals.isEmpty()) {
+        Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+            Text("도착 예정인 버스가 없습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        return
+    }
+
+    LazyColumn {
+        items(stationArrivals) { arrival ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 버스 번호 뱃지 (파란색 등 강조)
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Text(
+                        text = arrival.routeNo,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // 도착 정보 (예: 5분 후, 3정거장 전)
+                Column(modifier = Modifier.weight(1f)) {
+                    // 초(Second)를 분으로 변환. 60초 이하면 "곧 도착" 처리
+                    //val timeText = if (arrival.arrTime <= 60) "곧 도착" else "${arrival.arrTime / 60}분 후"
+                    val timeText = when {
+                        // 1. 시간이 -1 이면 API가 보내준 상태 텍스트("회차지대기", "운행대기" 등)를 그대로 띄워줍니다.
+                        arrival.arrTime < 0 -> arrival.arrivalState ?: "운행 대기"
+
+                        // 2. 60초 이하 남았으면 "곧 도착"
+                        arrival.arrTime <= 60 -> "곧 도착"
+
+                        // 3. 정상적인 시간 계산
+                        else -> "${arrival.arrTime / 60}분 후"
+                    }
+
+                    Text(text = timeText, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+                    Text(text = "${arrival.arrPrevStationCnt}정거장 전", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            Divider()
         }
     }
 }

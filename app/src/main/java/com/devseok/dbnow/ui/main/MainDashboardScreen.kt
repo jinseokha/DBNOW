@@ -1,5 +1,6 @@
 package com.devseok.dbnow.ui.main
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,235 +9,249 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DirectionsBus
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainDashboardScreen(
     viewModel: MainDashboardViewModel = hiltViewModel(),
-    onNavigateToSearch: () -> Unit,
+    onNavigateToSearch: () -> Unit // 검색 화면(SearchScreen)으로 이동하는 콜백
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // 뷰모델의 상태를 Compose UI가 관찰하도록 설정
+    val state by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("대구 버스 나우", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                ),
+            TopAppBar(
+                title = { Text("내 즐겨찾기", fontWeight = FontWeight.Bold) },
                 actions = {
-                    // 검색 화면으로 이동하는 아이콘 버튼
+                    // 수동 새로고침 버튼
+                    IconButton(onClick = { viewModel.loadBusArrivals(isRefresh = true) }) {
+                        Icon(imageVector = Icons.Default.Refresh, contentDescription = "새로고침")
+                    }
+                    // 검색 화면 이동 버튼
                     IconButton(onClick = { onNavigateToSearch() }) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "검색 화면으로 이동"
-                        )
+                        Icon(imageVector = Icons.Default.Search, contentDescription = "검색")
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             )
         }
-    ) { padding ->
-        // uiState.isRefreshing 상태에 따라 인디케이터가 자동으로 나타나고 사라짐
-        PullToRefreshBox(
+    ) { paddingValues ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            isRefreshing = uiState.isRefreshing,
-            onRefresh = { viewModel.onEvent(MainDashboardEvent.Refresh) }
+                .padding(paddingValues)
+                .background(MaterialTheme.colorScheme.background)
         ) {
             when {
-                // 최초 로딩 상태 (새로고침이 아닌 초기 진입 시)
-                uiState.isLoading && !uiState.isRefreshing -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                // 1. 전체 화면 로딩 상태
+                state.isLoading -> {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
 
-                // 에러 상태
-                uiState.errorMessage != null -> {
-                    Text(
-                        text = uiState.errorMessage!!,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                // 2. 즐겨찾기 데이터가 아예 없을 때 (Empty State)
+                state.favoriteBuses.isEmpty() -> {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DirectionsBus,
+                            contentDescription = "Empty",
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "등록된 즐겨찾기가 없습니다.\n우측 상단 돋보기 아이콘을 눌러 추가해보세요!",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
 
-                // 즐겨찾기 목록이 비어있을 때
-                uiState.favoriteBuses.isEmpty() -> {
-                    Text(
-                        text = "즐겨찾기한 버스가 없습니다.\n노선을 검색하여 추가해 보세요.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.Gray,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
-
-                // 정상적인 리스트 렌더링
+                // 3. 즐겨찾기 데이터가 있을 때 목록 렌더링
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        // ★ 낙관적 업데이트를 위해 item.baseInfo.id를 Key로 사용합니다.
                         items(
-                            items = uiState.favoriteBuses,
-                            key = { "${it.busId}_${it.stationId}" } // 재구성 최적화를 위한 고유 키
-                        ) { busItem ->
-                            BusArrivalCard(
-                                busItem = busItem,
+                            items = state.favoriteBuses,
+                            key = { it.baseInfo.id }
+                        ) { favoriteItem ->
+                            FavoriteBusCard(
+                                item = favoriteItem,
                                 onDeleteClick = {
-                                    viewModel.onEvent(
-                                        MainDashboardEvent.DeleteFavorite(
-                                            stationId = busItem.stationId,
-                                            busId = busItem.busId
-                                        )
-                                    )
+                                    // 사용자가 삭제 버튼을 누르면 뷰모델의 삭제 함수(낙관적 업데이트) 호출
+                                    viewModel.deleteFavoriteItem(favoriteItem)
                                 }
                             )
                         }
                     }
                 }
             }
+
+            // 에러 메시지가 있으면 스낵바나 토스트를 띄워줍니다 (간단히 Text로 오버레이 처리 가능)
+            if (state.errorMessage != null) {
+                // SnackbarHost 등을 활용해 처리하는 것을 권장합니다.
+            }
         }
     }
 }
 
+/**
+ * 개별 즐겨찾기 항목을 그려주는 카드 UI 컴포저블
+ */
 @Composable
-fun BusArrivalCard(
-    busItem: FavoriteBusItem,
-    onDeleteClick: () -> Unit = {}
+fun FavoriteBusCard(
+    item: FavoriteBusItem,
+    onDeleteClick: () -> Unit
 ) {
+    val baseInfo = item.baseInfo
+    val arrivals = item.arrivals
+
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Row(
+        Column(
             modifier = Modifier
+                .fillMaxWidth()
                 .padding(16.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
         ) {
-            // 버스 번호 배지 (노선 타입에 따른 색상 변경)
-            BusNumberBadge(
-                number = busItem.busNumber,
-                busType = busItem.busType
-            )
+            // [상단] 타이틀 및 삭제 버튼 영역
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 버스인지 정류장인지에 따라 아이콘 분기
+                    Icon(
+                        imageVector = if (baseInfo.isBus) Icons.Default.DirectionsBus else Icons.Default.Place,
+                        contentDescription = "타입 아이콘",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = baseInfo.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = baseInfo.subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // 2. 정류장 정보
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = busItem.stationName,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (busItem.isLowFloor) {
-                    Text(
-                        text = "♿ 저상 버스",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF4CAF50) // 초록색 강조
+                // 삭제(X) 버튼
+                IconButton(onClick = onDeleteClick, modifier = Modifier.size(24.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "삭제",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            // 3. 도착 시간 정보 (곧 도착일 경우 빨간색 강조 및 애니메이션 효과 가능)
-            ArrivalStatusView(remainingTime = busItem.remainingTime)
+            Spacer(modifier = Modifier.height(16.dp))
+            Divider(color = MaterialTheme.colorScheme.surfaceVariant, thickness = 1.dp)
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // 4. 추가 기능 버튼 (삭제 등)
-            IconButton(onClick = onDeleteClick) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "삭제",
-                    tint = MaterialTheme.colorScheme.outline
+            // [하단] 실시간 도착 정보 영역
+            if (arrivals.isEmpty()) {
+                Text(
+                    text = "도착 예정 정보가 없습니다 (운행 종료 또는 대기 중)",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
                 )
+            } else {
+                // 상위 2대까지만 보여주도록 제한 (전광판 UI)
+                arrivals.take(2).forEach { arrival ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // 버스 번호 (정류장을 즐겨찾기 했을 경우 여러 버스가 올 수 있으므로 명시)
+                        Text(
+                            text = arrival.routeNo,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        // 도착 시간 (초 단위 -> 분 단위 변환)
+                        val timeText = if (arrival.arrTime <= 60) {
+                            "곧 도착"
+                        } else {
+                            "${arrival.arrTime / 60}분 후"
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "${arrival.arrPrevStationCnt}정거장 전",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = timeText,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error // 눈에 띄는 빨간색
+                            )
+                        }
+                    }
+                }
             }
-        }
-    }
-}
-
-@Composable
-fun BusNumberBadge(number: String, busType: String) {
-    // 대구 버스 표준 색상 매핑
-    val badgeColor = when {
-        busType.contains("급행") -> Color(0xFFE53935) // 빨강
-        busType.contains("간선") -> Color(0xFF1E88E5) // 파랑
-        busType.contains("지선") -> Color(0xFFFDD835) // 노랑
-        else -> MaterialTheme.colorScheme.secondary
-    }
-
-    Surface(
-        color = badgeColor,
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Text(
-            text = number,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            color = if (busType.contains("지선")) Color.Black else Color.White,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-fun ArrivalStatusView(remainingTime: String) {
-    val isApproaching = remainingTime.contains("곧") || remainingTime.contains("잠시")
-
-    Column(horizontalAlignment = Alignment.End) {
-        Text(
-            text = remainingTime,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.ExtraBold,
-            color = if (isApproaching) Color.Red else MaterialTheme.colorScheme.onSurface
-        )
-        if (isApproaching) {
-            Text(
-                text = "준비하세요!",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.Red
-            )
         }
     }
 }

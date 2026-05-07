@@ -1,6 +1,5 @@
 package com.devseok.dbnow.data.mapper
 
-import com.devseok.dbnow.data.model.BusArrivalResponse
 import com.devseok.dbnow.data.model.BusArrivalTicket
 import com.devseok.dbnow.domain.model.ArrivalInfo
 

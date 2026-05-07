@@ -3,6 +3,7 @@ package com.devseok.dbnow.ui.main
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devseok.dbnow.domain.repository.AuthRepository
+import com.devseok.dbnow.domain.repository.FavoriteRepository
 import com.devseok.dbnow.domain.usecase.DeleteFavoriteUseCase
 import com.devseok.dbnow.domain.usecase.GetFavoriteBusArrivalsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,109 +18,100 @@ import javax.inject.Inject
 class MainDashboardViewModel @Inject constructor(
     private val getFavoriteBusArrivalsUseCase: GetFavoriteBusArrivalsUseCase,
     private val deleteFavoriteUseCase: DeleteFavoriteUseCase,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val favoriteRepository: FavoriteRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MainDashboardState())
     val uiState: StateFlow<MainDashboardState> = _uiState.asStateFlow()
 
     init {
-        // 앱 시작 시 자동 로그인 확인 및 데이터 로드
-        checkAuthAndLoadData()
+        // 앱이 시작되면 로컬 DB(Room)에서 즐겨찾기 목록을 관찰하기 시작합니다.
+        observeFavorites()
     }
 
-    fun onEvent(event: MainDashboardEvent) {
-        when (event) {
-            is MainDashboardEvent.Refresh -> {
-                loadBusArrivals(isRefresh = true)
-            }
-            is MainDashboardEvent.DeleteFavorite -> {
-                deleteFavoriteItem(event.stationId, event.busId)
-            }
-            is MainDashboardEvent.ToggleAlarm -> {
-                // 알림 설정 로직 호출
-            }
-            is MainDashboardEvent.Retry -> {
+    /**
+     * 1. 로컬 DB(Room) 즐겨찾기 목록 관찰 (Flow)
+     * DB에 변경(추가/삭제)이 발생할 때마다 자동으로 호출되어 목록을 최신화합니다.
+     */
+    private fun observeFavorites() {
+        viewModelScope.launch {
+            favoriteRepository.getFavorites().collect { favorites ->
+                _uiState.update { it.copy(favoriteList = favorites) }
+                // 즐겨찾기 원본이 갱신되었으므로 실시간 도착 정보를 요청합니다.
                 loadBusArrivals(isRefresh = false)
             }
         }
     }
 
-    private fun checkAuthAndLoadData() {
+    /**
+     * 2. 실시간 도착 정보 조회 (당겨서 새로고침 또는 DB 갱신 시 호출)
+     */
+    fun loadBusArrivals(isRefresh: Boolean = false) {
         viewModelScope.launch {
-            if (authRepository.getCurrentUserId() == null) {
+            val currentFavorites = _uiState.value.favoriteList
 
-                val result = authRepository.signInAnonymously()
-                result.onSuccess { uid ->
-                    // 로그인 성공 (필요시 로그 출력)
-                    println("익명 로그인 성공: $uid")
-                }.onFailure { e ->
-                    // 네트워크 에러 등으로 실패 시 처리
-                    e.printStackTrace()
+            // 즐겨찾기가 없으면 로딩 없이 빈 화면 표시
+            if (currentFavorites.isEmpty()) {
+                _uiState.update {
+                    it.copy(isLoading = false, isRefreshing = false, favoriteBuses = emptyList())
                 }
+                return@launch
             }
-            loadBusArrivals()
+
+            // 로딩 UI 상태 ON
+            _uiState.update {
+                if (isRefresh) it.copy(isRefreshing = true) else it.copy(isLoading = true)
+            }
+
+            // UseCase를 통해 병렬(async/awaitAll)로 API 통신
+            runCatching {
+                getFavoriteBusArrivalsUseCase(currentFavorites)
+            }.onSuccess { busItemsMap ->
+                // Map -> UI 전용 모델(FavoriteBusItem) 리스트로 변환
+                val uiFavoriteItems = busItemsMap.map { (baseItem, arrivalList) ->
+                    FavoriteBusItem(baseInfo = baseItem, arrivals = arrivalList)
+                }
+
+                _uiState.update { it.copy(
+                    isLoading = false,
+                    isRefreshing = false,
+                    favoriteBuses = uiFavoriteItems,
+                    errorMessage = null
+                )}
+            }.onFailure { error ->
+                _uiState.update { it.copy(
+                    isLoading = false,
+                    isRefreshing = false,
+                    errorMessage = error.message ?: "실시간 정보를 불러오지 못했습니다."
+                )}
+            }
         }
     }
 
-    private fun loadBusArrivals(isRefresh: Boolean = false) {
+    /**
+     * 3. 즐겨찾기 삭제 (낙관적 업데이트 적용)
+     * 체감 속도 향상을 위해 UI에서 먼저 지운 뒤, 백그라운드에서 DB를 삭제합니다.
+     */
+    fun deleteFavoriteItem(targetItem: FavoriteBusItem) {
         viewModelScope.launch {
-            if (isRefresh) {
-                _uiState.update { it.copy(isRefreshing = true) }
-            } else {
-                _uiState.update { it.copy(isLoading = true) }
-            }
-
-            getFavoriteBusArrivalsUseCase()
-                .onSuccess { busItems ->
-                    _uiState.update { it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        favoriteBuses = busItems,
-                        errorMessage = null
-                    )}
-                }
-                .onFailure { error ->
-                    _uiState.update { it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        errorMessage = error.message ?: "데이터를 가져오지 못했습니다."
-                    )}
-                }
-        }
-    }
-
-    private fun deleteFavoriteItem(stationId: String, busId: String) {
-        viewModelScope.launch {
-            // 롤백(Rollback)을 대비해 현재 상태의 리스트를 백업해둡니다.
+            // [UI 선 반영] 기존 리스트에서 선택된 항목을 제외한 새 리스트로 덮어쓰기
             val previousList = _uiState.value.favoriteBuses
+            val updatedList = previousList.filter { it.baseInfo.id != targetItem.baseInfo.id }
+            _uiState.update { it.copy(favoriteBuses = updatedList) }
 
-            // UI State에서 즉시 해당 항목을 제거합니다 (Optimistic Update).
-            // 서버 응답을 기다리지 않고 화면에서 바로 카드가 사라지게 되어 UX가 매우 부드러워집니다.
-            _uiState.update { state ->
-                state.copy(
-                    favoriteBuses = state.favoriteBuses.filterNot {
-                        it.stationId == stationId && it.busId == busId
-                    }
-                )
+            // [DB 삭제 로직 수행]
+            runCatching {
+                deleteFavoriteUseCase(targetItem.baseInfo)
+            }.onFailure {
+                // 실패 시 원래 UI 리스트로 복구하고 에러 메시지 띄움
+                _uiState.update {
+                    it.copy(
+                        favoriteBuses = previousList,
+                        errorMessage = "즐겨찾기 삭제에 실패했습니다."
+                    )
+                }
             }
-
-            // 백그라운드에서 실제 Firebase 삭제를 요청합니다.
-            deleteFavoriteUseCase(stationId, busId)
-                .onSuccess {
-                    // 성공 시 이미 UI에서 지웠으므로 추가 작업이 필요 없습니다.
-                    // (필요하다면 "삭제되었습니다" 스낵바 이벤트를 발생시킬 수 있습니다)
-                }
-                .onFailure { error ->
-                    // 네트워크 에러 등으로 삭제 실패 시,
-                    // 백업해둔 이전 리스트로 화면을 롤백(복구)하고 에러 메시지를 띄웁니다.
-                    _uiState.update { state ->
-                        state.copy(
-                            favoriteBuses = previousList,
-                            errorMessage = "즐겨찾기 삭제에 실패했습니다: ${error.message}"
-                        )
-                    }
-                }
         }
     }
 

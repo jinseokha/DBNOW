@@ -1,7 +1,6 @@
 package com.devseok.dbnow.data.api
 
 
-import com.devseok.dbnow.data.model.BusArrivalResponse
 import com.devseok.dbnow.data.model.BusResponse
 import retrofit2.Response
 import retrofit2.http.GET
@@ -14,19 +13,8 @@ interface BusApiService {
      * 용도: "706" 같은 버스 번호(routeNo)로 검색하여 노선 ID(routeId) 등을 획득
      */
     @GET("getBasic02")
-    suspend fun searchBusRoute(
+    suspend fun getBasic(
         @Query("serviceKey", encoded = true) serviceKey: String
-    ): Response<BusResponse>
-
-    /**
-     * 2. 정류소 정보 조회 (정류장 검색용)
-     * 엔드포인트: getBs02
-     * 용도: "경북대학교" 같은 정류장 이름(nodeNm)으로 검색하여 정류소 ID(nodeId) 획득
-     */
-    @GET("getBs02")
-    suspend fun searchStations(
-        @Query("serviceKey") serviceKey: String,
-        @Query("nodeNm") nodeNm: String, // 검색할 정류장 이름
     ): Response<BusResponse>
 
     /**
@@ -36,10 +24,21 @@ interface BusApiService {
      * (특정 노선만 필터링하려면 파라미터에 routeId를 추가하거나, 응답받은 후 앱에서 필터링)
      */
     @GET("getRealtime02")
-    suspend fun getStationArrivalList(
-        @Query("serviceKey") serviceKey: String,
-        @Query("bsId") stationId: String, // 정류소 ID
-        // @Query("routeId") routeId: String? = null, // API 지원 여부에 따라 추가
+    suspend fun getRealtime(
+        @Query("serviceKey", encoded = true) serviceKey: String,
+        @Query("bsId", encoded = true) bsId: String, // 정류소 ID
+        @Query("routeId", encoded = true) routeId: String? = null, // API 지원 여부에 따라 추가
+    ): Response<BusResponse>
+
+    /**
+     * 2. 정류소 정보 조회 (정류장 검색용)
+     * 엔드포인트: getBs02
+     * 용도: "경북대학교" 같은 정류장 이름(nodeNm)으로 검색하여 정류소 ID(nodeId) 획득
+     */
+    @GET("getBs02")
+    suspend fun getBs(
+        @Query("serviceKey", encoded = true) serviceKey: String,
+        @Query("routeId", encoded = true) nodeNm: String, // 검색할 정류장 이름
     ): Response<BusResponse>
 
     /**
@@ -49,9 +48,9 @@ interface BusApiService {
      * (상세 화면에서 '버스들이 어디쯤 오고 있나' 보여줄 때 사용)
      */
     @GET("getPos02")
-    suspend fun getBusPositions(
-        @Query("serviceKey") serviceKey: String,
-        @Query("routeId") routeId: String, // 노선 ID
+    suspend fun getPos(
+        @Query("serviceKey", encoded = true) serviceKey: String,
+        @Query("routeId", encoded = true) routeId: String, // 노선 ID
     ): Response<BusResponse>
 
     /**
@@ -60,8 +59,8 @@ interface BusApiService {
      * 용도: 지도 위에 노선이 지나가는 선(경로)을 그리기 위한 좌표 데이터 획득
      */
     @GET("getLink02")
-    suspend fun getRouteLinks(
-        @Query("serviceKey") serviceKey: String,
-        @Query("routeId") routeId: String,
+    suspend fun getLink(
+        @Query("serviceKey", encoded = true) serviceKey: String,
+        @Query("routeId", encoded = true) routeId: String,
     ): Response<BusResponse>
 }
