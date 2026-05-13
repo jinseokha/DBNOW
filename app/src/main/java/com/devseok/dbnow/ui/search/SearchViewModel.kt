@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.devseok.dbnow.domain.model.SearchResultItem
 import com.devseok.dbnow.domain.repository.BusRepository
 import com.devseok.dbnow.domain.repository.FavoriteRepository
+import com.devseok.dbnow.domain.repository.RecentSearchRepository
 import com.devseok.dbnow.domain.usecase.AddFavoriteUseCase
 import com.devseok.dbnow.domain.usecase.DeleteFavoriteUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,7 +28,8 @@ class SearchViewModel @Inject constructor(
     private val busRepository: BusRepository,
     private val favoriteRepository: FavoriteRepository,
     private val addFavoriteUseCase: AddFavoriteUseCase,
-    private val deleteFavoriteUseCase: DeleteFavoriteUseCase
+    private val deleteFavoriteUseCase: DeleteFavoriteUseCase,
+    private val recentSearchRepository: RecentSearchRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SearchState())
@@ -35,6 +37,8 @@ class SearchViewModel @Inject constructor(
 
     // 검색어 타이핑 시 API 과호출을 막기 위한 디바운스용 Flow
     private val queryFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
+
+    private val searchQueryFlow = MutableStateFlow("")
 
     init {
         // 1. Room DB의 즐겨찾기 목록을 실시간으로 관찰하여 하트(별) 아이콘 상태를 동기화합니다.
@@ -47,12 +51,25 @@ class SearchViewModel @Inject constructor(
 
         // 2. 검색어 입력 디바운스 처리 (0.3초 동안 추가 입력이 없으면 검색 실행)
         viewModelScope.launch {
-            queryFlow
-                .debounce(300L)
-                .distinctUntilChanged()
+            searchQueryFlow
+                .debounce(500L) // ⏳ 사용자가 타자를 멈추고 0.5초(500ms) 대기
+                .distinctUntilChanged() // 🔄 방금 전 검색어와 똑같으면 무시
                 .collect { query ->
-                    executeSearch(query)
+                    // 0.5초 동안 추가 입력이 없으면 드디어 검색 실행!
+                    if (query.isNotBlank()) {
+                        executeSearch(query)
+                    } else {
+                        // 검색어가 다 지워졌을 때는 검색 결과를 초기화
+                        _state.update { it.copy(results = emptyList(), hasSearched = false) }
+                    }
                 }
+        }
+
+        // 최근 검색어 실시간 관찰
+        viewModelScope.launch {
+            recentSearchRepository.getRecentSearches().collect { searches ->
+                _state.update { it.copy(recentSearches = searches) }
+            }
         }
     }
 
@@ -62,12 +79,11 @@ class SearchViewModel @Inject constructor(
     fun onEvent(event: SearchEvent) {
         when (event) {
             is SearchEvent.OnQueryChanged -> {
+                // UI(텍스트 필드)의 글자는 타자를 치는 즉시 바뀌어야 하므로 바로 업데이트!
                 _state.update { it.copy(query = event.query) }
-                if (event.query.isNotBlank()) {
-                    queryFlow.tryEmit(event.query)
-                } else {
-                    resetState()
-                }
+
+                // 검색 실행은 searchQueryFlow에 넘겨서 디바운스(0.5초 대기)를 타게 만듭니다.
+                searchQueryFlow.value = event.query
             }
             SearchEvent.OnSearchClick -> search()
             SearchEvent.OnClearClick -> resetState()
@@ -75,6 +91,18 @@ class SearchViewModel @Inject constructor(
             SearchEvent.OnToastShown -> _state.update { it.copy(toastMessage = null) }
             is SearchEvent.OnRowClick -> fetchDetails(event.item)
             SearchEvent.OnBottomSheetDismiss -> clearSelection()
+
+            // 최근 검색어 클릭 시 텍스트 필드 업데이트 및 검색 실행
+            is SearchEvent.OnRecentSearchClick -> {
+                _state.update { it.copy(query = event.query) }
+                search()
+            }
+            is SearchEvent.OnDeleteRecentSearch -> {
+                viewModelScope.launch { recentSearchRepository.deleteSearch(event.query) }
+            }
+            SearchEvent.OnClearRecentSearches -> {
+                viewModelScope.launch { recentSearchRepository.clearAll() }
+            }
         }
     }
 
@@ -87,6 +115,8 @@ class SearchViewModel @Inject constructor(
 
     private suspend fun executeSearch(query: String) {
         _state.update { it.copy(isLoading = true, errorMessage = null, hasSearched = true) }
+
+        recentSearchRepository.addSearch(query)
 
         busRepository.searchBusAndStations(query)
             .onSuccess { searchResults ->
@@ -180,6 +210,8 @@ class SearchViewModel @Inject constructor(
         _state.update {
             it.copy(query = "", results = emptyList(), hasSearched = false, errorMessage = null)
         }
+
+        searchQueryFlow.value = ""
     }
 
     private fun clearSelection() {

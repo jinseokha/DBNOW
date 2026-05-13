@@ -22,6 +22,12 @@ fun DBNowNavGraph() {
                 onNavigateToSearch = {
                     // 검색 탭/화면으로 이동
                     navController.navigate(Screen.Search.route)
+                },
+                onNavigateToStation = { stationId, name ->
+                    navController.navigate(Screen.StationDetail.createRoute(stationId, name))
+                },
+                onNavigateToBus = { routeId, name ->
+                    navController.navigate(Screen.BusRouteDetail.createRoute(routeId, name))
                 }
             )
         }

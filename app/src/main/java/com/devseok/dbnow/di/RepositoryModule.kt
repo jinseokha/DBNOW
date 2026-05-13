@@ -3,9 +3,11 @@ package com.devseok.dbnow.di
 import com.devseok.dbnow.data.repository.AuthRepositoryImpl
 import com.devseok.dbnow.data.repository.BusRepositoryImpl
 import com.devseok.dbnow.data.repository.FavoriteRepositoryImpl
+import com.devseok.dbnow.data.repository.RecentSearchRepositoryImpl
 import com.devseok.dbnow.domain.repository.AuthRepository
 import com.devseok.dbnow.domain.repository.BusRepository
 import com.devseok.dbnow.domain.repository.FavoriteRepository
+import com.devseok.dbnow.domain.repository.RecentSearchRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -34,4 +36,9 @@ abstract class RepositoryModule {
         favoriteRepositoryImpl: FavoriteRepositoryImpl
     ): FavoriteRepository
 
+    @Binds
+    @Singleton
+    abstract fun bindRecentSearchRepository(
+        recentSearchRepositoryImpl: RecentSearchRepositoryImpl
+    ): RecentSearchRepository
 }

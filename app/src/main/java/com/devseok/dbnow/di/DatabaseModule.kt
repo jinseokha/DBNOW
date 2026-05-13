@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.devseok.dbnow.data.local.AppDatabase
 import com.devseok.dbnow.data.local.FavoriteDao
+import com.devseok.dbnow.data.local.RecentSearchDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -23,7 +24,9 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "dbnow_database" // 원하는 로컬 DB 이름
-        ).build()
+        )
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     // 2. 에러의 원인이었던 FavoriteDao 제공
@@ -31,5 +34,11 @@ object DatabaseModule {
     @Singleton
     fun provideFavoriteDao(database: AppDatabase): FavoriteDao {
         return database.favoriteDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideRecentSearchDao(database: AppDatabase): RecentSearchDao {
+        return database.recentSearchDao()
     }
 }

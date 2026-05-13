@@ -21,6 +21,8 @@ data class SearchState(
     val selectedItem: SearchResultItem? = null,        // 클릭한 항목 (이 값이 null이 아니면 바텀 시트가 열림)
     val isDetailLoading: Boolean = false,               // 상세 정보 로딩 상태
 
+    val recentSearches: List<String> = emptyList(),
+
 // ==========================================
     // 1. 정류소 클릭 시 상태 (전광판)
     // ==========================================

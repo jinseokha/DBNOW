@@ -1,6 +1,7 @@
 package com.devseok.dbnow.ui.main
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -47,7 +49,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 @Composable
 fun MainDashboardScreen(
     viewModel: MainDashboardViewModel = hiltViewModel(),
-    onNavigateToSearch: () -> Unit // 검색 화면(SearchScreen)으로 이동하는 콜백
+    onNavigateToSearch: () -> Unit, // 검색 화면(SearchScreen)으로 이동하는 콜백
+    onNavigateToStation: (stationId: String, name: String) -> Unit,
+    onNavigateToBus: (routeId: String, name: String) -> Unit
 ) {
     // 뷰모델의 상태를 Compose UI가 관찰하도록 설정
     val state by viewModel.uiState.collectAsState()
@@ -124,6 +128,18 @@ fun MainDashboardScreen(
                                 onDeleteClick = {
                                     // 사용자가 삭제 버튼을 누르면 뷰모델의 삭제 함수(낙관적 업데이트) 호출
                                     viewModel.deleteFavoriteItem(favoriteItem)
+                                },
+                                onCardClick = {
+                                    val baseInfo = favoriteItem.baseInfo
+                                    if (baseInfo.isBus) {
+                                        onNavigateToBus(baseInfo.routeId ?: baseInfo.id, baseInfo.title)
+                                    } else {
+                                        onNavigateToStation(baseInfo.stationId ?: baseInfo.id, baseInfo.title)
+                                    }
+                                },
+                                // ★ 2. 내부 도착 버스 리스트 클릭 시 (해당 버스 노선도로 이동)
+                                onRouteClick = { routeId, routeName ->
+                                    onNavigateToBus(routeId, routeName)
                                 }
                             )
                         }
@@ -145,13 +161,18 @@ fun MainDashboardScreen(
 @Composable
 fun FavoriteBusCard(
     item: FavoriteBusItem,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    onCardClick: () -> Unit,
+    onRouteClick: (routeId: String, routeName: String) -> Unit
 ) {
     val baseInfo = item.baseInfo
     val arrivals = item.arrivals
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCardClick() },
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -167,7 +188,10 @@ fun FavoriteBusCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     // 버스인지 정류장인지에 따라 아이콘 분기
                     Icon(
                         imageVector = if (baseInfo.isBus) Icons.Default.DirectionsBus else Icons.Default.Place,
@@ -217,7 +241,9 @@ fun FavoriteBusCard(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 4.dp),
+                            .clip(RoundedCornerShape(8.dp)) // 터치 효과(Ripple) 모양 다듬기
+                            .clickable { onRouteClick(arrival.routeId, arrival.routeNo) } // ★ 도착 버스 개별 클릭 영역
+                            .padding(vertical = 8.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -229,10 +255,10 @@ fun FavoriteBusCard(
                         )
 
                         // 도착 시간 (초 단위 -> 분 단위 변환)
-                        val timeText = if (arrival.arrTime <= 60) {
-                            "곧 도착"
-                        } else {
-                            "${arrival.arrTime / 60}분 후"
+                        val timeText = when {
+                            arrival.arrTime < 0 -> arrival.arrivalState ?: "운행 대기"
+                            arrival.arrTime <= 60 -> "곧 도착"
+                            else -> "${arrival.arrTime / 60}분 후"
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {

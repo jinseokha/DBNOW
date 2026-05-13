@@ -12,4 +12,8 @@ sealed class SearchEvent {
 
     data class OnRowClick(val item: SearchResultItem) : SearchEvent() // 행 전체 클릭 시
     object OnBottomSheetDismiss : SearchEvent()                     // 바텀 시트 닫을 때
+
+    data class OnRecentSearchClick(val query: String) : SearchEvent()
+    data class OnDeleteRecentSearch(val query: String) : SearchEvent()
+    object OnClearRecentSearches : SearchEvent()
 }

@@ -2,6 +2,7 @@ package com.devseok.dbnow.ui.search
 
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,7 +21,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsBus
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -34,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +45,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -114,6 +119,22 @@ fun SearchScreen(
         ) {
             // State 프로퍼티 조합에 따른 UI 렌더링 분기
             when {
+                state.query.isEmpty() -> {
+                    RecentSearchSection(
+                        recentSearches = state.recentSearches,
+                        onItemClick = { query ->
+                            viewModel.onEvent(SearchEvent.OnRecentSearchClick(query))
+                            focusManager.clearFocus() // 클릭 시 키보드 내림
+                        },
+                        onDeleteClick = { query ->
+                            viewModel.onEvent(SearchEvent.OnDeleteRecentSearch(query))
+                        },
+                        onClearAllClick = {
+                            viewModel.onEvent(SearchEvent.OnClearRecentSearches)
+                        }
+                    )
+                }
+
                 state.isLoading -> {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
@@ -165,6 +186,65 @@ fun SearchScreen(
     }
 }
 
+// =========================================================
+// 최근 검색어 컴포저블 (새로 추가됨)
+// =========================================================
+@Composable
+fun RecentSearchSection(
+    recentSearches: List<String>,
+    onItemClick: (String) -> Unit,
+    onDeleteClick: (String) -> Unit,
+    onClearAllClick: () -> Unit
+) {
+    if (recentSearches.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("최근 검색 기록이 없습니다.", color = Color.Gray)
+        }
+        return
+    }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("최근 검색어", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            TextButton(onClick = onClearAllClick) {
+                Text("전체 삭제", color = Color.Gray)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyColumn {
+            items(recentSearches) { query ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onItemClick(query) }
+                        .padding(vertical = 12.dp, horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.History, contentDescription = null, tint = Color.Gray)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(text = query, style = MaterialTheme.typography.bodyLarge)
+                    }
+                    IconButton(
+                        onClick = { onDeleteClick(query) },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "삭제", tint = Color.Gray)
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 @Composable
 fun SearchResultItemCard(
     item: SearchResultItem,
@@ -206,53 +286,6 @@ fun SearchResultItemCard(
     }
 }
 
-@Composable
-fun BottomSheetDetailsContent(
-    state: SearchState,
-    onFavoriteClick: (SearchResultItem) -> Unit
-) {
-    val selectedItem = state.selectedItem ?: return
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 24.dp)
-    ) {
-        // 타이틀: 버스면 노선도 느낌, 정류소면 전광판 느낌
-        val titleText = if (selectedItem.isBus) "[${selectedItem.title}] 실시간 노선도" else "'${selectedItem.title}' 실시간 도착"
-
-        Text(
-            text = titleText,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
-
-        Divider()
-
-        if (state.isDetailLoading) {
-            Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else {
-            // ★ 선택된 아이템이 버스냐 정류소냐에 따라 완전히 다른 UI를 그립니다.
-            if (selectedItem.isBus) {
-                // 1. 버스를 눌렀을 때 -> 노선도 + 실시간 위치 타임라인
-                BusRouteTimelineView(
-                    routeStations = state.routeStations,
-                    busPositions = state.busPositions,
-                    favoriteIds = state.favoriteIds,
-                    onFavoriteClick = onFavoriteClick
-                )
-            } else {
-                // 2. 정류소를 눌렀을 때 -> 실시간 도착 예정 버스 전광판
-                StationArrivalBoardView(
-                    stationArrivals = state.stationArrivals
-                )
-            }
-        }
-    }
-}
 
 // =========================================================
 // 1. 버스를 눌렀을 때: 타임라인 노선도 & 실시간 버스 위치 UI
